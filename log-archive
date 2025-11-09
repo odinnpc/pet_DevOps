@@ -1,0 +1,145 @@
+#!/usr/bin/env bash
+# log-archive - simple CLI tool to archive (tar.gz) a logs directory with timestamped filename
+# Usage: log-archive <log-directory> [--out-dir <archive-directory>] [--keep DAYS] [--dry-run] [-h|--help]
+# Example: log-archive /var/log --out-dir /var/log/archives --keep 30
+
+set -euo pipefail
+
+prog=$(basename "$0")
+
+usage() {
+  cat <<EOF
+$prog - archive logs directory into a timestamped tar.gz and log the action.
+
+Usage:
+  $prog <log-directory> [--out-dir <archive-directory>] [--keep DAYS] [--dry-run] [--help]
+
+Positional arguments:
+  <log-directory>        Directory containing logs to archive (e.g. /var/log)
+
+Options:
+  --out-dir DIR          Directory where archives are stored (default: <log-directory>/archives)
+  --keep DAYS            Remove archives older than DAYS (integer). Optional.
+  --dry-run              Show what would be done, don't create archive or delete anything.
+  -h, --help             Show this help and exit
+
+Example:
+  $prog /var/log --out-dir /var/log/archives --keep 30
+EOF
+}
+
+if [ "${#-}" -eq 0 ]; then
+  usage
+  exit 1
+fi
+
+# Defaults
+OUT_DIR=""
+KEEP_DAYS=""
+DRY_RUN=0
+
+# Simple arg parsing
+POSITIONAL=()
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    --out-dir)
+      OUT_DIR="$2"; shift 2;;
+    --keep)
+      KEEP_DAYS="$2"; shift 2;;
+    --dry-run)
+      DRY_RUN=1; shift;;
+    -h|--help)
+      usage; exit 0;;
+    -*)
+      echo "Unknown option: $1" >&2; usage; exit 2;;
+    *)
+      POSITIONAL+=("$1"); shift;;
+  esac
+done
+
+if [ ${#POSITIONAL[@]} -lt 1 ]; then
+  echo "Error: missing <log-directory>" >&2
+  usage
+  exit 2
+fi
+
+LOG_DIR="${POSITIONAL[0]}"
+
+# Resolve paths
+LOG_DIR=$(realpath "$LOG_DIR" 2>/dev/null || echo "$LOG_DIR")
+
+if [ ! -d "$LOG_DIR" ]; then
+  echo "Error: directory not found: $LOG_DIR" >&2
+  exit 3
+fi
+
+if [ -z "$OUT_DIR" ]; then
+  OUT_DIR="$LOG_DIR/archives"
+fi
+
+OUT_DIR=$(realpath -m "$OUT_DIR")
+
+TIMESTAMP=$(date +"%Y%m%d_%H%M%S")
+ARCHIVE_NAME="logs_archive_${TIMESTAMP}.tar.gz"
+ARCHIVE_PATH="${OUT_DIR}/${ARCHIVE_NAME}"
+
+LOGFILE="${OUT_DIR}/archive.log"
+
+# Ensure out dir exists
+if [ "$DRY_RUN" -eq 1 ]; then
+  echo "[DRY-RUN] Would create archive dir: $OUT_DIR"
+else
+  mkdir -p "$OUT_DIR"
+fi
+
+# Prevent accidentally archiving the archives directory if user mistakenly points LOG_DIR at parent
+# If OUT_DIR is inside LOG_DIR, exclude it from the tar
+EXCLUDE_ARG=()
+case "$OUT_DIR" in
+  "$LOG_DIR"/*|"$LOG_DIR")
+    # compute relative path to exclude
+    rel=$(realpath --relative-to="$LOG_DIR" "$OUT_DIR" 2>/dev/null || true)
+    if [ -n "$rel" ]; then
+      EXCLUDE_ARG=(--exclude="./${rel}")
+    fi
+    ;;
+esac
+
+echo "Archiving: $LOG_DIR -> $ARCHIVE_PATH"
+if [ "$DRY_RUN" -eq 1 ]; then
+  echo "[DRY-RUN] tar czf $ARCHIVE_PATH -C \"$LOG_DIR\" . ${EXCLUDE_ARG[*]}"
+else
+  # Create a temp file to avoid partial archives with same name
+  TMP_ARCHIVE="${ARCHIVE_PATH}.part"
+  # Use tar to compress; include only regular files and symlinks (best-effort)
+  tar czf "$TMP_ARCHIVE" -C "$LOG_DIR" . "${EXCLUDE_ARG[@]}"
+  mv -f "$TMP_ARCHIVE" "$ARCHIVE_PATH"
+fi
+
+# Record metadata: timestamp, source dir, archive path, archive size bytes
+if [ "$DRY_RUN" -eq 1 ]; then
+  echo "[DRY-RUN] Would write log entry to $LOGFILE"
+else
+  ARCHIVE_SIZE=0
+  if [ -f "$ARCHIVE_PATH" ]; then
+    ARCHIVE_SIZE=$(stat -c%s "$ARCHIVE_PATH" 2>/dev/null || echo 0)
+  fi
+  echo "$(date --iso-8601=seconds) | src=$LOG_DIR | archive=$ARCHIVE_PATH | size=$ARCHIVE_SIZE" >> "$LOGFILE"
+  echo "Logged archive to $LOGFILE"
+fi
+
+# Optional: remove old archives
+if [ -n "$KEEP_DAYS" ]; then
+  if ! [[ "$KEEP_DAYS" =~ ^[0-9]+$ ]]; then
+    echo "Invalid --keep value: must be integer days" >&2; exit 4
+  fi
+
+  echo "Removing archives older than $KEEP_DAYS days from $OUT_DIR"
+  if [ "$DRY_RUN" -eq 1 ]; then
+    echo "[DRY-RUN] find \"$OUT_DIR\" -maxdepth 1 -type f -name 'logs_archive_*.tar.gz' -mtime +$KEEP_DAYS -print"
+  else
+    find "$OUT_DIR" -maxdepth 1 -type f -name 'logs_archive_*.tar.gz' -mtime +"$KEEP_DAYS" -print -delete || true
+  fi
+fi
+
+echo "Done."
