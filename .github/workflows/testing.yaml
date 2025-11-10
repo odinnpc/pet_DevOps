@@ -1,11 +1,15 @@
 name: Testing Workflow
-on: push
+
+on: 
+  push:
+
 jobs:
-  runs-on: ubuntu-latest
-  steps:
-    - name: Get the repository code
-      uses: actions/checkout@v5
-    - name: install dependencies
-      run: npm ci
-    - name: run tests
-      run: npm test
+  build: let's go
+    runs-on: ubuntu-latest
+    steps:
+      - name: Get the repository code
+        uses: actions/checkout@v5
+      - name: Install dependencies
+        run: npm ci
+      - name: Run tests
+        run: npm test
