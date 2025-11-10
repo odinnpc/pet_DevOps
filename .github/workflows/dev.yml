@@ -1,4 +1,4 @@
-name: install
+name: dev
 on:
   push:
     branches: [ main ]
@@ -18,7 +18,7 @@ jobs:
           node-version: 18
 
       - name: Install deps
-        run: npm ci
+        run: npm install
 
       - name: Lint
         run: npm run lint       #  yarn lint
