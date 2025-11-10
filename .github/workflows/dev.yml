@@ -1,5 +1,4 @@
-name: CI — Node.js
-
+name: install
 on:
   push:
     branches: [ main ]
