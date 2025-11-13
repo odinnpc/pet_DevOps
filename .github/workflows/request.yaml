@@ -1,5 +1,8 @@
 name: Print pull request context
-on: workflow_dispatch
+on: 
+    pull_request:
+        types: [opened, reopened, edited]
+    workflow_dispatch: 
 jobs:
   print-pr-context:
     runs-on: ubuntu-latest
