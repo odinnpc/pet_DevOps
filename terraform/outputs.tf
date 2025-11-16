@@ -1,100 +1,105 @@
-# -----------------------------
-# EC2 Instance Outputs
-# -----------------------------
-output "instance_id" {
-  value = aws_instance.ubuntu_nginx.id
+########################
+# outputs.tf
+########################
+
+# --- Individual instance outputs ---
+output "web_server_id" {
+  value = aws_instance.web_server.id
 }
 
-output "instance_private_dns" {
-  value = aws_instance.ubuntu_nginx.private_dns
+output "web_server_private_ip" {
+  value = aws_instance.web_server.private_ip
 }
 
-output "instance_private_ip" {
-  value = aws_instance.ubuntu_nginx.private_ip
+output "web_server_private_dns" {
+  value = aws_instance.web_server.private_dns
 }
 
-output "instance_public_dns" {
-  value = aws_instance.ubuntu_nginx.public_dns
+output "web_server_public_ip" {
+  value = aws_instance.web_server.public_ip
 }
 
-output "instance_public_ip" {
-  value = aws_instance.ubuntu_nginx.public_ip
+output "web_server_public_dns" {
+  value = aws_instance.web_server.public_dns
 }
 
-output "instance_availability_zone" {
-  value = aws_instance.ubuntu_nginx.availability_zone
+output "web_server_availability_zone" {
+  value = aws_instance.web_server.availability_zone
 }
 
-output "instance_tags" {
-  value = aws_instance.ubuntu_nginx.tags
+output "web_server_tags" {
+  value = aws_instance.web_server.tags
 }
 
-# -----------------------------
-# Security Group Outputs
-# -----------------------------
-output "security_group_id" {
-  value = aws_security_group.nginx_sg.id
+# --- app instance ---
+output "app_server_id" {
+  value = aws_instance.app_server.id
 }
 
-output "security_group_name" {
-  value = aws_security_group.nginx_sg.name
+output "app_server_private_ip" {
+  value = aws_instance.app_server.private_ip
 }
 
-output "security_group_vpc_id" {
-  value = aws_security_group.nginx_sg.vpc_id
+output "app_server_public_ip" {
+  value = aws_instance.app_server.public_ip
 }
 
-output "security_group_ingress_ports" {
-  value = [for rule in aws_security_group.nginx_sg.ingress : rule.from_port]
+output "app_server_tags" {
+  value = aws_instance.app_server.tags
 }
 
-output "security_group_egress_ports" {
-  value = [for rule in aws_security_group.nginx_sg.egress : rule.from_port]
+# --- db instance ---
+output "db_server_id" {
+  value = aws_instance.db_server.id
 }
 
-# -----------------------------
-# Elastic IP Outputs
-# -----------------------------
-output "eip_public_ip" {
-  value = aws_eip.my_permanent_ip.public_ip
+output "db_server_private_ip" {
+  value = aws_instance.db_server.private_ip
 }
 
-output "eip_allocation_id" {
-  value = aws_eip.my_permanent_ip.id
+output "db_server_public_ip" {
+  value = aws_instance.db_server.public_ip
 }
 
-output "eip_associated_instance" {
-  value = aws_eip.my_permanent_ip.instance
+output "db_server_tags" {
+  value = aws_instance.db_server.tags
 }
 
-# -----------------------------
-# VPC Outputs
-# -----------------------------
-data "aws_vpc" "default" {
-  default = true
+# --- aggregated lists / maps (handy for automation) ---
+output "all_instance_ids" {
+  value = [
+    aws_instance.web_server.id,
+    aws_instance.app_server.id,
+    aws_instance.db_server.id
+  ]
 }
 
-output "vpc_id" {
-  value = data.aws_vpc.default.id
+output "all_private_ips" {
+  value = [
+    aws_instance.web_server.private_ip,
+    aws_instance.app_server.private_ip,
+    aws_instance.db_server.private_ip
+  ]
 }
 
-output "vpc_cidr_block" {
-  value = data.aws_vpc.default.cidr_block
-}
-
-# Get default Security Group for VPC
-data "aws_security_group" "default_sg" {
-  filter {
-    name   = "vpc-id"
-    values = [data.aws_vpc.default.id]
-  }
-
-  filter {
-    name   = "group-name"
-    values = ["default"]
+output "instances_map" {
+  value = {
+    web  = aws_instance.web_server.id,
+    app  = aws_instance.app_server.id,
+    db   = aws_instance.db_server.id
   }
 }
 
-output "vpc_default_security_group_id" {
-  value = data.aws_security_group.default_sg.id
+# --- Elastic IPs (one per instance) ---
+output "web_server_eip_public_ip" {
+  value = aws_eip.web_server_eip.public_ip
+}
+
+output "app_server_eip_public_ip" {
+  value = aws_eip.app_server_eip.public_ip
+}
+
+# DB EIP only if you kept it — if you removed the db EIP, delete this block
+output "db_server_eip_public_ip" {
+  value = aws_eip.db_server_eip.public_ip
 }
